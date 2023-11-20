@@ -39,16 +39,13 @@ class StudentAgent(Agent):
 
         Please check the sample implementation in agents/random_agent.py or agents/human_agent.py for more details.
         """
-        root = Node(chess_board, my_pos, adv_pos, max_step, 4)
-        print("my_pos")
-        print(my_pos)
+        root = Node(chess_board, my_pos, adv_pos, max_step, 2)
 
         # Perform MCTS iterations
-        for _ in range(1000):
+        for _ in range(500):
             node = root
             while not node.is_terminal():
-                print("eh")
-                if not len(node.children) > 20:
+                if not len(node.children) > 10:
                     node = node.expand()
                     break
                 else:
@@ -60,6 +57,8 @@ class StudentAgent(Agent):
         # Select the best move based on visits
         best_child = max(root.children, key=lambda child: child.visits)
         return best_child.my_pos, self.dir_map[best_child.get_wall_direction()]
+
+
 class Node:
     def __init__(self, chess_board, my_pos, adv_pos, max_steps, exploration_constant):
         self.parent = None
@@ -103,6 +102,7 @@ class Node:
     def get_score(self):
         my_available_moves = len(self.get_possible_moves(True, self.my_pos, self.max_steps))
         adv_available_moves = len(self.get_possible_moves(False, self.adv_pos, self.max_steps))
+
         return my_available_moves - adv_available_moves
 
     def get_possible_moves(self, me, cur_pos, distance):
@@ -111,30 +111,40 @@ class Node:
 
         valid_moves = set()
         other = self.adv_pos if me else self.my_pos
+        # BFS
+        state_queue = [(cur_pos, 0)]
+        visited = {tuple(cur_pos)}
 
-        for i in range(self.board_size):
-            for j in range(self.board_size):
+        while state_queue:
+            cur_pos, cur_step = state_queue.pop(0)
+            r, c = cur_pos
+            if cur_step == self.max_steps:
+                break
+            for dir, move in enumerate(self.moves):
+                if self.board[r, c, dir]:
+                    continue
 
-                if self.check_valid_step(me, cur_pos, [i, j]):
-                    valid_moves.add((i, j))
+                next_pos = np.add(cur_pos, move)
+                if np.array_equal(next_pos, other) or tuple(next_pos) in visited:
+                    continue
 
-        sorted_moves = sorted(valid_moves, key=lambda move: abs(move[0] - other[0]) + abs(move[1] - other[1]))
-        return set(sorted_moves)
+                # check if box in
+                count = 0
+                for dir in self.board[next_pos[0], next_pos[1]]:
+                    if dir:
+                        count += 1
 
+                if count == 3:
+                    continue
+
+                visited.add(tuple(next_pos))
+                state_queue.append((next_pos, cur_step + 1))
+                # valid_moves.add(tuple(next_pos))
+
+        sorted_moves = sorted(visited, key=lambda move: abs(move[0] - other[0]) + abs(move[1] - other[1]), reverse=True)
+        return sorted_moves
 
     def check_valid_step(self, me, start_pos, end_pos):
-        """
-        Check if the step the agent takes is valid (reachable and within max steps).
-
-        Parameters
-        ----------
-        start_pos : tuple
-            The start position of the agent.
-        end_pos : np.ndarray
-            The end position of the agent.
-        barrier_dir : int
-            The direction of the barrier.
-        """
         # Endpoint already has barrier or is border
         r, c = end_pos
 
@@ -168,7 +178,6 @@ class Node:
                 state_queue.append((next_pos, cur_step + 1))
 
         return is_reached
-
 
     def is_within_board(self, pos):
         return 0 <= pos[0] < self.board_size and 0 <= pos[1] < self.board_size
