@@ -42,7 +42,7 @@ class StudentAgent(Agent):
         root = Node(chess_board, my_pos, adv_pos, max_step, 2)
 
         # Perform MCTS iterations
-        for _ in range(500):
+        for _ in range(250):
             node = root
             while not node.is_terminal():
                 if not len(node.children) > 10:
@@ -192,18 +192,48 @@ class Node:
         y_diff = self.adv_pos[0] - self.my_pos[0]
         x_diff = self.adv_pos[1] - self.my_pos[1]
 
+        available_positions = [not self.board[self.my_pos[0], self.my_pos[1], i] for i in range(4)]
+
         if abs(x_diff) > abs(y_diff):
             # Place wall horizontally
             if x_diff > 0:
-                return "r" if not self.board[self.my_pos[0], self.my_pos[1], 1] else "d"
+                if available_positions[1]:
+                    return "r"
+                elif available_positions[2]:
+                    return "d"
+                elif available_positions[3]:
+                    return "l"
+                else:
+                    return "u"
             else:
-                return "l" if not self.board[self.my_pos[0], self.my_pos[1], 3] else "u"
+                if available_positions[3]:
+                    return "l"
+                elif available_positions[0]:
+                    return "u"
+                elif available_positions[1]:
+                    return "r"
+                else:
+                    return "d"
         else:
             # Place wall vertically
             if y_diff < 0:
-                return "u" if not self.board[self.my_pos[0], self.my_pos[1], 0] else "r"
+                if available_positions[0]:
+                    return "u"
+                elif available_positions[1]:
+                    return "r"
+                elif available_positions[2]:
+                    return "d"
+                else:
+                    return "l"
             else:
-                return "d" if not self.board[self.my_pos[0], self.my_pos[1], 2] else "l"
+                if available_positions[2]:
+                    return "d"
+                elif available_positions[3]:
+                    return "l"
+                elif available_positions[0]:
+                    return "u"
+                else:
+                    return "r"
 
     def is_terminal(self):
         father = dict()
