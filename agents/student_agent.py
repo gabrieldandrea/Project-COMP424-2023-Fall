@@ -5,6 +5,7 @@ import sys
 import numpy as np
 from copy import deepcopy
 import time
+import heapq
 
 
 @register_agent("student_agent")
@@ -55,8 +56,8 @@ class StudentAgent(Agent):
             node.backpropagate(result)
 
         # Select the best move based on visits
-        best_child = max(root.children, key=lambda child: child.visits)
-        return best_child.my_pos, self.dir_map[best_child.get_wall_direction()]
+        best_child = max(root.children, key=lambda child: child.ucb1())
+        return best_child.my_pos, self.dir_map[best_child.get_wall_direction_modified()]
 
 
 class Node:
@@ -78,6 +79,12 @@ class Node:
             "r": 1,
             "d": 2,
             "l": 3,
+        }
+        self.num_map = {
+            0 :"u",
+            1 : "r",
+            2 : "d",
+            3 : "l"
         }
 
     def ucb1(self):
@@ -187,6 +194,45 @@ class Node:
         self.s += result
         if self.parent:
             self.parent.backpropagate(result)
+
+    def set_barrier(self, place, r, c, dir):
+        opposites = {0: 2, 1: 3, 2: 0, 3: 1}
+
+        # Set the barrier to True
+        self.board[r, c, dir] = place
+        # Set the opposite barrier to True
+        move = self.moves[dir]
+
+        self.board[r + move[0], c + move[1], opposites[dir]] = place
+
+    def get_wall_direction_modified(self):
+
+        r, c = self.my_pos[0], self.my_pos[1]
+
+        available_directions = [not self.board[r, c, i] for i in range(4)]
+
+        opposites = {0: 2, 1: 3, 2: 0, 3: 1}
+
+        move_heap = []
+
+        for i in range(len(available_directions)):
+            if not available_directions[i]:
+                continue
+            # place wall
+            self.set_barrier(True, r, c, i)
+
+            # check moves
+            my_available_moves = len(self.get_possible_moves(True, self.my_pos, self.max_steps))
+            adv_available_moves = len(self.get_possible_moves(False, self.adv_pos, self.max_steps))
+
+            # remove wall
+            self.set_barrier(False, r, c, i)
+
+            # add move [moves, dir]
+            heapq.heappush(move_heap, [(adv_available_moves - my_available_moves), i])
+
+        print(move_heap)
+        return self.num_map[heapq.heappop(move_heap)[1]]
 
     def get_wall_direction(self):
         y_diff = self.adv_pos[0] - self.my_pos[0]
