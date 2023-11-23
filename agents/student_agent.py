@@ -57,7 +57,7 @@ class StudentAgent(Agent):
 
         # Select the best move based on visits
         best_child = max(root.children, key=lambda child: child.ucb1())
-        return best_child.my_pos, self.dir_map[best_child.get_wall_direction_modified()]
+        return best_child.my_pos, self.dir_map[best_child.get_wall_direction()]
 
 
 class Node:
@@ -204,7 +204,7 @@ class Node:
 
         self.board[r + move[0], c + move[1], opposites[dir]] = place
 
-    def get_wall_direction_modified(self):
+    def get_wall_direction(self):
 
         r, c = self.my_pos[0], self.my_pos[1]
 
