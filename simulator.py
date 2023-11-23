@@ -13,7 +13,7 @@ def get_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--player_1", type=str, default="random_agent")
     parser.add_argument("--player_2", type=str, default="random_agent")
-    parser.add_argument("--board_size", type=int, default=None)
+    parser.add_argument("--board_size", type=int, default=12)
     parser.add_argument(
         "--board_size_min",
         type=int,

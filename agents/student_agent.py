@@ -43,20 +43,19 @@ class StudentAgent(Agent):
         root = Node(chess_board, my_pos, adv_pos, max_step, 2)
 
         # Perform MCTS iterations
-        for _ in range(250):
+        for _ in range(200):
             node = root
             while not node.is_terminal():
-                if not len(node.children) > 10:
+                if not len(node.children) > 15:
                     node = node.expand()
                     break
                 else:
                     node = node.select_child()
 
-            result = node.get_score()
-            node.backpropagate(result)
+                result = node.get_score()
+                node.backpropagate(result)
 
-        # Select the best move based on visits
-        best_child = max(root.children, key=lambda child: child.ucb1())
+        best_child = max(root.children, key=lambda child: child.ucb())
         return best_child.my_pos, self.dir_map[best_child.get_wall_direction()]
 
 
@@ -71,7 +70,7 @@ class Node:
         self.my_pos = my_pos
         self.adv_pos = adv_pos
         self.max_steps = max_steps
-        self.exploration_constant = exploration_constant  # Constant for UCB1 exploration
+        self.exploration_constant = exploration_constant
         # Moves (Up, Right, Down, Left)
         self.moves = ((-1, 0), (0, 1), (1, 0), (0, -1))
         self.dir_map = {
@@ -87,7 +86,10 @@ class Node:
             3 : "l"
         }
 
-    def ucb1(self):
+    def ucb(self):
+        '''
+        Upper Confidence bound formula taken from the slides
+        '''
         if self.visits == 0:
             return float('inf')
         exploitation = self.s / self.visits
@@ -95,10 +97,10 @@ class Node:
         return exploitation + exploration
 
     def select_child(self):
-        return max(self.children, key=lambda child: child.ucb1())
+        return max(self.children, key=lambda child: child.ucb())
 
     def expand(self):
-        possible_moves = self.get_possible_moves(True, self.my_pos, self.max_steps)
+        possible_moves = self.get_possible_moves(True, self.my_pos, self.max_steps, True)
         for move in possible_moves:
             new_board = deepcopy(self.board)
             child = Node(new_board, move, self.adv_pos, self.max_steps, self.exploration_constant)
@@ -107,12 +109,25 @@ class Node:
         return self.select_child()
 
     def get_score(self):
-        my_available_moves = len(self.get_possible_moves(True, self.my_pos, self.max_steps))
-        adv_available_moves = len(self.get_possible_moves(False, self.adv_pos, self.max_steps))
+        '''
+        The heuristic we are using is the number of available moves based on player positions.
+        This function counts available moves of both players and returns the difference
+        '''
+        my_available_moves = len(self.get_possible_moves(True, self.my_pos, self.max_steps, True))
+        adv_available_moves = len(self.get_possible_moves(False, self.adv_pos, self.max_steps, True))
 
         return my_available_moves - adv_available_moves
 
-    def get_possible_moves(self, me, cur_pos, distance):
+    def get_possible_moves(self, me, cur_pos, distance, collision):
+        '''
+        Function used to count the number of available moves.
+        BFS approach taken from world.py
+        cur_pos is the position of the player we want to consider
+        The me parameter is used to determine whether we are counting moves for our agent or the opponent.
+        The collision paramter is used to determine whether we want to consider the other player as a blocker
+        Distance is the max_steps
+        '''
+
         if distance == 0:
             return set()
 
@@ -132,17 +147,10 @@ class Node:
                     continue
 
                 next_pos = np.add(cur_pos, move)
-                if np.array_equal(next_pos, other) or tuple(next_pos) in visited:
+                if (collision and np.array_equal(next_pos, other)) or tuple(next_pos) in visited:
                     continue
 
-                # check if box in
-                count = 0
-                for dir in self.board[next_pos[0], next_pos[1]]:
-                    if dir:
-                        count += 1
-
-                if count < 3:
-                    valid_moves.add(tuple(next_pos))
+                valid_moves.add(tuple(next_pos))
 
                 visited.add(tuple(next_pos))
                 state_queue.append((next_pos, cur_step + 1))
@@ -205,12 +213,17 @@ class Node:
         self.board[r + move[0], c + move[1], opposites[dir]] = place
 
     def get_wall_direction(self):
+        '''
+        This function determines the best direction to place a wall
+        It works by iterating over the available directions, placing the wall in a temporary state
+        Then checking how many moves are allowed for both players
+        The difference is added to a min heap.
+        The direction with the smallest value is taken, since this means
+        '''
 
         r, c = self.my_pos[0], self.my_pos[1]
 
         available_directions = [not self.board[r, c, i] for i in range(4)]
-
-        opposites = {0: 2, 1: 3, 2: 0, 3: 1}
 
         move_heap = []
 
@@ -222,8 +235,8 @@ class Node:
             self.set_barrier(True, r, c, i)
 
             # check moves
-            my_available_moves = len(self.get_possible_moves(True, self.my_pos, self.max_steps))
-            adv_available_moves = len(self.get_possible_moves(False, self.adv_pos, self.max_steps))
+            my_available_moves = len(self.get_possible_moves(True, self.my_pos, self.max_steps, False))
+            adv_available_moves = len(self.get_possible_moves(False, self.adv_pos, self.max_steps, False))
 
             # remove wall
             self.set_barrier(False, r, c, i)
@@ -232,7 +245,9 @@ class Node:
             heapq.heappush(move_heap, [(adv_available_moves - my_available_moves), i])
 
         # Check for ties
-        best_moves = heapq.nlargest(2, move_heap)
+        print(move_heap)
+        best_moves = heapq.nsmallest(2, move_heap)
+        print(best_moves)
         if len(best_moves) > 1 and best_moves[0][0] == best_moves[1][0]:
             # There is a tie, check the adv facing direction without a barrier
             y_diff = self.adv_pos[0] - self.my_pos[0]
@@ -240,7 +255,7 @@ class Node:
 
             if abs(x_diff) > abs(y_diff):
                 # Place wall horizontally
-                if x_diff > 0:
+                if x_diff < 0:
                     if available_directions[1]:
                         return "r"
                     elif available_directions[2]:
@@ -279,11 +294,12 @@ class Node:
                     else:
                         return "r"
 
-            # No tie or tiebreaker needed, return the selected direction
         return self.num_map[heapq.heappop(move_heap)[1]]
 
 
     def is_terminal(self):
+        '''
+        This function checks if the board is in a terminal state'''
         father = dict()
         for r in range(self.board_size):
             for c in range(self.board_size):
@@ -312,19 +328,7 @@ class Node:
                 find((r, c))
         p0_r = find(tuple(self.my_pos))
         p1_r = find(tuple(self.adv_pos))
-        p0_score = list(father.values()).count(p0_r)
-        p1_score = list(father.values()).count(p1_r)
         if p0_r == p1_r:
             return False
-        player_win = None
-        win_blocks = -1
-        if p0_score > p1_score:
-            player_win = 0
-            win_blocks = p0_score
-        elif p0_score < p1_score:
-            player_win = 1
-            win_blocks = p1_score
-        else:
-            player_win = -1  # Tie
 
         return True
