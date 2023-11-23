@@ -141,14 +141,13 @@ class Node:
                     if dir:
                         count += 1
 
-                if count == 3:
-                    continue
+                if count < 3:
+                    valid_moves.add(tuple(next_pos))
 
                 visited.add(tuple(next_pos))
                 state_queue.append((next_pos, cur_step + 1))
-                # valid_moves.add(tuple(next_pos))
 
-        sorted_moves = sorted(visited, key=lambda move: abs(move[0] - other[0]) + abs(move[1] - other[1]), reverse=True)
+        sorted_moves = sorted(valid_moves, key=lambda move: abs(move[0] - other[0]) + abs(move[1] - other[1]), reverse=True)
         return sorted_moves
 
     def check_valid_step(self, me, start_pos, end_pos):
@@ -218,6 +217,7 @@ class Node:
         for i in range(len(available_directions)):
             if not available_directions[i]:
                 continue
+
             # place wall
             self.set_barrier(True, r, c, i)
 
@@ -231,55 +231,57 @@ class Node:
             # add move [moves, dir]
             heapq.heappush(move_heap, [(adv_available_moves - my_available_moves), i])
 
-        print(move_heap)
+        # Check for ties
+        best_moves = heapq.nlargest(2, move_heap)
+        if len(best_moves) > 1 and best_moves[0][0] == best_moves[1][0]:
+            # There is a tie, check the adv facing direction without a barrier
+            y_diff = self.adv_pos[0] - self.my_pos[0]
+            x_diff = self.adv_pos[1] - self.my_pos[1]
+
+            if abs(x_diff) > abs(y_diff):
+                # Place wall horizontally
+                if x_diff > 0:
+                    if available_directions[1]:
+                        return "r"
+                    elif available_directions[2]:
+                        return "d"
+                    elif available_directions[3]:
+                        return "l"
+                    else:
+                        return "u"
+                else:
+                    if available_directions[3]:
+                        return "l"
+                    elif available_directions[0]:
+                        return "u"
+                    elif available_directions[1]:
+                        return "r"
+                    else:
+                        return "d"
+            else:
+                # Place wall vertically
+                if y_diff < 0:
+                    if available_directions[0]:
+                        return "u"
+                    elif available_directions[1]:
+                        return "r"
+                    elif available_directions[2]:
+                        return "d"
+                    else:
+                        return "l"
+                else:
+                    if available_directions[2]:
+                        return "d"
+                    elif available_directions[3]:
+                        return "l"
+                    elif available_directions[0]:
+                        return "u"
+                    else:
+                        return "r"
+
+            # No tie or tiebreaker needed, return the selected direction
         return self.num_map[heapq.heappop(move_heap)[1]]
 
-    def get_wall_direction(self):
-        y_diff = self.adv_pos[0] - self.my_pos[0]
-        x_diff = self.adv_pos[1] - self.my_pos[1]
-
-        available_positions = [not self.board[self.my_pos[0], self.my_pos[1], i] for i in range(4)]
-
-        if abs(x_diff) > abs(y_diff):
-            # Place wall horizontally
-            if x_diff > 0:
-                if available_positions[1]:
-                    return "r"
-                elif available_positions[2]:
-                    return "d"
-                elif available_positions[3]:
-                    return "l"
-                else:
-                    return "u"
-            else:
-                if available_positions[3]:
-                    return "l"
-                elif available_positions[0]:
-                    return "u"
-                elif available_positions[1]:
-                    return "r"
-                else:
-                    return "d"
-        else:
-            # Place wall vertically
-            if y_diff < 0:
-                if available_positions[0]:
-                    return "u"
-                elif available_positions[1]:
-                    return "r"
-                elif available_positions[2]:
-                    return "d"
-                else:
-                    return "l"
-            else:
-                if available_positions[2]:
-                    return "d"
-                elif available_positions[3]:
-                    return "l"
-                elif available_positions[0]:
-                    return "u"
-                else:
-                    return "r"
 
     def is_terminal(self):
         father = dict()
